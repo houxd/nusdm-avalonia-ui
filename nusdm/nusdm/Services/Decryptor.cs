@@ -82,7 +82,7 @@ namespace nusdm
 			{
 				try
 				{
-					File.Copy(tmp + file, destination + "\\" + file, true);
+					File.Copy(tmp + file, Path.Combine(destination, file), true);
 				}
 				catch (Exception)
 				{
@@ -95,16 +95,16 @@ namespace nusdm
 		{
 			foreach (var file in files)
 			{
-				if (File.Exists(destination + "\\" + file))
+				if (File.Exists(Path.Combine(destination, file)))
 				{
-					File.Delete(destination + "\\" + file);
+					File.Delete(Path.Combine(destination, file));
 				}
 			}
 		}
 		
 		private static int Start()
 		{
-			string fileName = destination + "\\" + files[2];
+			string fileName = Path.Combine(destination, files[2]);
 			Process p = new Process
 			{
 				StartInfo = new ProcessStartInfo

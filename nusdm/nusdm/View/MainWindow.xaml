@@ -39,7 +39,8 @@
 			ItemsSource="{Binding Titles}"
 			SelectedItem="{Binding SelectedItem}"
 			IsVisible="{Binding IsIdle}"
-			ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+			ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+			PointerPressed="lbxTitles_PointerPressed">
 
 			<ListBox.ItemTemplate>
 				<DataTemplate>

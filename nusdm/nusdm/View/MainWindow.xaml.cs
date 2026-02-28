@@ -1,5 +1,6 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using System.ComponentModel;
 
 namespace nusdm
@@ -25,11 +26,28 @@ namespace nusdm
 			mainWindowViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
 			DataContext = mainWindowViewModel;
+
+			// Avalonia ContextMenu 处于独立视觉树，无法自动继承 DataContext，需手动指定
+			lbxTitles.ContextMenu!.DataContext = mainWindowViewModel;
+			txtLog.ContextMenu!.DataContext = mainWindowViewModel;
 		}
 
 		#endregion Public Constructors
 
 		#region Private Methods
+
+		private void lbxTitles_PointerPressed(object? sender, PointerPressedEventArgs e)
+		{
+			// Avalonia 不会在右键时自动更改 SelectedItem，需要手动处理
+			var point = e.GetCurrentPoint(lbxTitles);
+			if (point.Properties.IsRightButtonPressed)
+			{
+				var item = (e.Source as Avalonia.Controls.Control)
+					?.FindAncestorOfType<ListBoxItem>();
+				if (item != null)
+					lbxTitles.SelectedItem = item.DataContext;
+			}
+		}
 
 		private void FocusFirstInListBox()
 		{
