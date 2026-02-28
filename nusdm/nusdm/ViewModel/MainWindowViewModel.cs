@@ -1,8 +1,10 @@
-﻿using Newtonsoft.Json;
+﻿using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -10,8 +12,6 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Data;
 
 namespace nusdm
 {
@@ -25,8 +25,8 @@ namespace nusdm
 		private string filter;
 		private bool isIdle = true;
 		private string logEntry;
+		private List<Title> allTitles;
 		private ObservableCollection<Title> titles;
-		private ICollectionView titlesView;
 		private string windowTitle;
 		#endregion Private Fields
 
@@ -54,7 +54,7 @@ namespace nusdm
 		public RelayCommand CmdDownloadDlc { get; private set; }
 		public RelayCommand CmdDownloadTitle { get; private set; }
 		public RelayCommand CmdDownloadUpdate { get; private set; }
-		public string Filter { get { return filter; } set { if (value != filter) { filter = value; titlesView.Refresh(); OnPropertyChanged(); } } }
+		public string Filter { get { return filter; } set { if (value != filter) { filter = value; RefreshTitles(); OnPropertyChanged(); } } }
 		public bool IsIdle { get { return isIdle; } set { isIdle = value; OnPropertyChanged(); } }
 		public string Log { get { return logEntry; } set { logEntry = value; OnPropertyChanged(); } }
 		public Title SelectedItem { get; set; }
@@ -68,7 +68,7 @@ namespace nusdm
 				}
 				if (SelectedItem.TitleType.Contains("game", StringComparison.OrdinalIgnoreCase) && !SelectedItem.TitleType.Contains("update", StringComparison.OrdinalIgnoreCase))
 				{
-					return Titles.FirstOrDefault(o => o.TitleId == "0005000C" + SelectedItem.TitleId.Substring(8, 8)) != null; ;
+					return (allTitles ?? new List<Title>()).FirstOrDefault(o => o.TitleId == "0005000C" + SelectedItem.TitleId.Substring(8, 8)) != null;
 				}
 				return false;
 			}
@@ -84,7 +84,7 @@ namespace nusdm
 				}
 				if (SelectedItem.TitleType.Contains("game", StringComparison.OrdinalIgnoreCase) && !SelectedItem.TitleType.Contains("dlc", StringComparison.OrdinalIgnoreCase))
 				{
-					return Titles.FirstOrDefault(o => o.TitleId == "0005000E" + SelectedItem.TitleId.Substring(8, 8)) != null; ;
+					return (allTitles ?? new List<Title>()).FirstOrDefault(o => o.TitleId == "0005000E" + SelectedItem.TitleId.Substring(8, 8)) != null;
 				}
 				return false;
 			}
@@ -104,9 +104,12 @@ namespace nusdm
 		{
 			if (Decryptor.GetHashMD5(Encoding.ASCII.GetBytes(COMMONKEY.ToLower())).ToLower() != commonKeyHash)
 			{
-				MessageBox.Show("Please specify the correct WII U common key in config file.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-				Process.Start("notepad.exe", SettingsProvider.Savefile).WaitForExit();
-				Application.Current.Shutdown();
+				Dispatcher.UIThread.InvokeAsync(async () =>
+				{
+					await MessageBox.ShowErrorAsync("Error", "Please specify the correct WII U common key in config file.");
+					Process.Start(new ProcessStartInfo(SettingsProvider.Savefile) { UseShellExecute = true });
+					(Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.TryShutdown();
+				});
 			}
 		}
 
@@ -231,7 +234,7 @@ namespace nusdm
 				  IsIdle = false;
 
 				  // Search for the title in the collection
-				  Title title = Titles.First(o => o.TitleId == tid);
+				  Title title = allTitles.First(o => o.TitleId == tid);
 
 				  // Set the window titles prop of the file which will be downloaded
 				  WindowTitle = $"[{title.Region}] [{title.TitleType}] {(String.IsNullOrEmpty(title.Name) ? title.TitleId : title.Name)}";
@@ -374,35 +377,44 @@ namespace nusdm
 
 			CmdDownloadDlc = new RelayCommand(() => { if (SelectedItem != null) DownloadTitle("0005000C" + SelectedItem.TitleId.Substring(8, 8)); });
 
-			CmdCopyName = new RelayCommand(() =>
-							{
-								if (SelectedItem.Name != null)
-								{
-									Clipboard.SetText(SelectedItem.Name);
-									AddLogEntry("Name copied");
-								}
-							});
+			CmdCopyName = new RelayCommand(async () =>
+			{
+				if (SelectedItem?.Name != null)
+				{
+					await SetClipboardTextAsync(SelectedItem.Name);
+					AddLogEntry("Name copied");
+				}
+			});
 
-			CmdCopyTitleId = new RelayCommand(() =>
-							{
-								if (SelectedItem.TitleId != null)
-								{
-									Clipboard.SetText(SelectedItem.TitleId);
-									AddLogEntry("Title-ID copied");
-								}
-							});
-			CmdCopyTitleKey = new RelayCommand(() =>
-							{
-								if (SelectedItem.TitleKey != null)
-								{
-									Clipboard.SetText(SelectedItem.TitleKey);
-									AddLogEntry("Title-Key copied");
-								}
-							});
+			CmdCopyTitleId = new RelayCommand(async () =>
+			{
+				if (SelectedItem?.TitleId != null)
+				{
+					await SetClipboardTextAsync(SelectedItem.TitleId);
+					AddLogEntry("Title-ID copied");
+				}
+			});
 
-			CmdCopyLog = new RelayCommand(() => Clipboard.SetText(Log));
+			CmdCopyTitleKey = new RelayCommand(async () =>
+			{
+				if (SelectedItem?.TitleKey != null)
+				{
+					await SetClipboardTextAsync(SelectedItem.TitleKey);
+					AddLogEntry("Title-Key copied");
+				}
+			});
+
+			CmdCopyLog = new RelayCommand(async () => await SetClipboardTextAsync(Log));
 
 			CmdClearLog = new RelayCommand(() => Log = String.Empty);
+		}
+
+		private static async Task SetClipboardTextAsync(string text)
+		{
+			var clipboard = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)
+				?.MainWindow?.Clipboard;
+			if (clipboard != null)
+				await clipboard.SetTextAsync(text);
 		}
 
 		private void InitializeList()
@@ -417,16 +429,30 @@ namespace nusdm
 			string text = File.ReadAllText(fileName).Replace(@"\r\n", replaceStr).Replace(@"\n", replaceStr).Replace(@"\r", replaceStr);
 			text = Regex.Replace(text, @"\s+", " ");
 
-			Titles = JsonConvert.DeserializeObject<ObservableCollection<Title>>(text);
+			allTitles = JsonConvert.DeserializeObject<List<Title>>(text);
 
-			AddLogEntry($"{Titles.Count} titles parsed");
+			AddLogEntry($"{allTitles.Count} titles parsed");
 
-			titlesView = CollectionViewSource.GetDefaultView(Titles);
-
-			titlesView.Filter = UserFilter;
+			RefreshTitles();
 
 		}
-		private bool UserFilter(object item)
+
+		private void RefreshTitles()
+		{
+			if (allTitles == null)
+			{
+				Titles = new ObservableCollection<Title>();
+				return;
+			}
+
+			IEnumerable<Title> filtered = string.IsNullOrEmpty(Filter)
+				? allTitles
+				: allTitles.Where(t => UserFilter(t));
+
+			Titles = new ObservableCollection<Title>(filtered);
+		}
+
+		private bool UserFilter(Title item)
 		{
 			if (String.IsNullOrEmpty(Filter))
 			{
@@ -436,7 +462,7 @@ namespace nusdm
 			{
 				string[] filterWords = Filter.Split();
 
-				return filterWords.All(s => (item as Title).ToString().Contains(s, StringComparison.OrdinalIgnoreCase));
+				return filterWords.All(s => item.ToString().Contains(s, StringComparison.OrdinalIgnoreCase));
 			}
 		}
 

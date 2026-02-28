@@ -1,9 +1,6 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+﻿using Avalonia.Controls;
+using Avalonia.Input;
+using System.ComponentModel;
 
 namespace nusdm
 {
@@ -25,67 +22,33 @@ namespace nusdm
 			InitializeComponent();
 
 			mainWindowViewModel = new MainWindowViewModel();
+			mainWindowViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
 			DataContext = mainWindowViewModel;
 		}
 
 		#endregion Public Constructors
 
-		#region Public Methods
-
-		// https://stackoverflow.com/a/1080012/4859698
-		public static DependencyObject GetScrollViewer(DependencyObject o)
-		{
-			if (o is ScrollViewer)
-			{ return o; }
-
-			for (int i = 0; i < VisualTreeHelper.GetChildrenCount(o); i++)
-			{
-				var child = VisualTreeHelper.GetChild(o, i);
-
-				var result = GetScrollViewer(child);
-				if (result == null)
-				{
-					continue;
-				}
-				else
-				{
-					return result;
-				}
-			}
-
-			return null;
-		}
-
-		#endregion Public Methods
-
 		#region Private Methods
 
 		private void FocusFirstInListBox()
 		{
-			ScrollViewer scrollViewer = GetScrollViewer(lbxTitles) as ScrollViewer;
-			scrollViewer.ScrollToTop();
-
-			if (lbxTitles.Items.Count > 0)
+			if (lbxTitles.ItemCount > 0)
 			{
 				lbxTitles.SelectedIndex = 0;
 				lbxTitles.Focus();
-				var listBoxItem = (ListBoxItem)lbxTitles.ItemContainerGenerator.ContainerFromItem(lbxTitles.SelectedItem);
-				listBoxItem.Focus();
 			}
 		}
 
-		private void ListBoxItem_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e)
+		private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
 		{
-			e.Handled = true;
+			if (e.PropertyName == nameof(MainWindowViewModel.Log))
+			{
+				sv.ScrollToEnd();
+			}
 		}
 
-		private void TextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-		{
-			sv.ScrollToBottom();
-		}
-
-		private void TxtFilter_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+		private void TxtFilter_KeyDown(object? sender, KeyEventArgs e)
 		{
 			if (e.Key == Key.Enter || e.Key == Key.Down)
 			{
@@ -94,18 +57,18 @@ namespace nusdm
 			}
 		}
 
-		private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+		protected override void OnKeyDown(KeyEventArgs e)
 		{
-			if (Key.Escape == e.Key)
+			if (e.Key == Key.Escape)
 			{
 				Close();
+				e.Handled = true;
 			}
-			else if (Keyboard.Modifiers != ModifierKeys.Control)
+			else if (e.KeyModifiers == KeyModifiers.None)
 			{
-				// Allow alphanumeric and space.
-				if (e.Key >= Key.D0 && e.Key <= Key.D9 ||
-					e.Key >= Key.NumPad0 && e.Key <= Key.NumPad9 ||
-					e.Key >= Key.A && e.Key <= Key.Z ||
+				if ((e.Key >= Key.D0 && e.Key <= Key.D9) ||
+					(e.Key >= Key.NumPad0 && e.Key <= Key.NumPad9) ||
+					(e.Key >= Key.A && e.Key <= Key.Z) ||
 					e.Key == Key.Space ||
 					e.Key == Key.Back)
 				{
@@ -113,6 +76,8 @@ namespace nusdm
 					e.Handled = false;
 				}
 			}
+
+			base.OnKeyDown(e);
 		}
 
 		#endregion Private Methods
